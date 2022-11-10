@@ -1,14 +1,6 @@
 import torch
 from torch.autograd import grad
 from utils import *
-import time
-import datetime
-import numpy as np
-import copy
-import logging
-
-from pathlib import Path
-
 
 def s_test(z_test, t_test, model, z_loader, gpu=-1, damp=0.01, scale=25.0,
            recursion_depth=5000):
@@ -449,5 +441,189 @@ def calc_influence_single(model, train_loader, test_loader, test_id_num, gpu,
     harmful = np.argsort(influences)
     helpful = harmful[::-1]
 
-    return influences, harmful.tolist(), helpful.tolist()
+    return influences, harmful.tolist(), helpful.tolist(), test_id_num
 
+
+def get_dataset_sample_ids_per_class(class_id, num_samples, test_loader,
+                                     start_index=0):
+    """Gets the first num_samples from class class_id starting from
+    start_index. Returns a list with the indicies which can be passed to
+    test_loader.dataset[X] to retreive the actual data.
+    Arguments:
+        class_id: int, name or id of the class label
+        num_samples: int, number of samples per class to process
+        test_loader: DataLoader, can load the test dataset.
+        start_index: int, means after which x occourance to add an index
+            to the list of indicies. E.g. if =3, then it would add the
+            4th occourance of an item with the label class_nr to the list.
+    Returns:
+        sample_list: list of int, contains indicies of the relevant samples"""
+    #######
+    # NOTE / TODO: here's optimisation potential. We are currently searching
+    # for the x+1th sample and when that's found we cancel the loop. we could
+    # stop after finding the x'th picture (start_index + num_samples)
+    #######
+    sample_list = []
+    img_count = 0
+    for i in range(len(test_loader.dataset)):
+        _, t = test_loader.dataset[i]
+        if class_id == t:
+            img_count += 1
+            if (img_count > start_index) and \
+                    (img_count <= start_index + num_samples):
+                sample_list.append(i)
+            elif img_count > start_index + num_samples:
+                break
+
+    return sample_list
+
+
+def get_dataset_sample_ids(num_samples, test_loader, num_classes=None,
+                           start_index=0):
+    """Gets the first num_sample indices of all classes starting from
+    start_index per class. Returns a list and a dict containing the indicies.
+    Arguments:
+        num_samples: int, number of samples of each class to return
+        test_loader: DataLoader, can load the test dataset
+        num_classes: int, number of classes contained in the dataset
+        start_index: int, means after which x occourance to add an index
+            to the list of indicies. E.g. if =3, then it would add the
+            4th occourance of an item with the label class_nr to the list.
+    Returns:
+        sample_dict: dict, containing dict[class] = list_of_indices
+        sample_list: list, containing a continious list of indices"""
+    sample_dict = {}
+    sample_list = []
+    if not num_classes:
+        num_classes = len(np.unique(test_loader.dataset.targets))
+    if start_index > len(test_loader.dataset) / num_classes:
+        logging.warn(f"The variable test_start_index={start_index} is "
+                     f"larger than the number of available samples per class.")
+    for i in range(num_classes):
+        sample_dict[str(i)] = get_dataset_sample_ids_per_class(
+            i, num_samples, test_loader, start_index)
+        # Append the new list on the same level as the old list
+        # Avoids having a list of lists
+        sample_list[len(sample_list):len(sample_list)] = sample_dict[str(i)]
+    return sample_dict, sample_list
+
+
+def calc_img_wise(config, model, train_loader, test_loader):
+    """Calculates the influence function one test point at a time. Calcualtes
+    the `s_test` and `grad_z` values on the fly and discards them afterwards.
+    Arguments:
+        config: dict, contains the configuration from cli params"""
+    influences_meta = copy.deepcopy(config)
+    test_sample_num = config['test_sample_num']
+    test_start_index = config['test_start_index']
+    outdir = Path(config['outdir'])
+    outdir.mkdir(exist_ok=True, parents=True)
+
+    # If calculating the influence for a subset of the whole dataset,
+    # calculate it evenly for the same number of samples from all classes.
+    # `test_start_index` is `False` when it hasn't been set by the user. It can
+    # also be set to `0`.
+    if test_sample_num and test_start_index is not False:
+        test_dataset_iter_len = test_sample_num * config['num_classes']
+        _, sample_list = get_dataset_sample_ids(test_sample_num, test_loader,
+                                                config['num_classes'],
+                                                test_start_index)
+    else:
+        test_dataset_iter_len = len(test_loader.dataset)
+
+    # Set up logging and save the metadata conf file
+    logging.info(f"Running on: {test_sample_num} images per class.")
+    logging.info(f"Starting at img number: {test_start_index} per class.")
+    influences_meta['test_sample_index_list'] = sample_list
+    influences_meta_fn = f"influences_results_meta_{test_start_index}-" \
+                         f"{test_sample_num}.json"
+    influences_meta_path = outdir.joinpath(influences_meta_fn)
+    save_json(influences_meta, influences_meta_path)
+
+    influences = {}
+    # Main loop for calculating the influence function one test sample per
+    # iteration.
+    for j in range(test_dataset_iter_len):
+        # If we calculate evenly per class, choose the test img indicies
+        # from the sample_list instead
+        if test_sample_num and test_start_index:
+            if j >= len(sample_list):
+                logging.warn("ERROR: the test sample id is out of index of the"
+                             " defined test set. Jumping to next test sample.")
+                next
+            i = sample_list[j]
+        else:
+            i = j
+
+        start_time = time.time()
+        influence, harmful, helpful, _ = calc_influence_single(
+            model, train_loader, test_loader, test_id_num=i, gpu=config['gpu'],
+            recursion_depth=config['recursion_depth'], r=config['r_averaging'])
+        end_time = time.time()
+
+        ###########
+        # Different from `influence` above
+        ###########
+        influences[str(i)] = {}
+        _, label = test_loader.dataset[i]
+        influences[str(i)]['label'] = label
+        influences[str(i)]['num_in_dataset'] = j
+        influences[str(i)]['time_calc_influence_s'] = end_time - start_time
+        infl = [x.cpu().numpy().tolist() for x in influence]
+        influences[str(i)]['influence'] = infl
+        influences[str(i)]['harmful'] = harmful[:500]
+        influences[str(i)]['helpful'] = helpful[:500]
+
+        tmp_influences_path = outdir.joinpath(f"influence_results_tmp_"
+                                              f"{test_start_index}_"
+                                              f"{test_sample_num}"
+                                              f"_last-i_{i}.json")
+        save_json(influences, tmp_influences_path)
+        display_progress("Test samples processed: ", j, test_dataset_iter_len)
+
+    logging.info(f"The results for this run are:")
+    logging.info("Influences: ")
+    logging.info(influence[:3])
+    logging.info("Most harmful img IDs: ")
+    logging.info(harmful[:3])
+    logging.info("Most helpful img IDs: ")
+    logging.info(helpful[:3])
+
+    influences_path = outdir.joinpath(f"influence_results_{test_start_index}_"
+                                      f"{test_sample_num}.json")
+    save_json(influences, influences_path)
+
+    return influences
+
+
+def calc_all_grad_then_test(config, model, train_loader, test_loader):
+    """Calculates the influence function by first calculating
+    all grad_z, all s_test and then loading them to calc the influence"""
+
+    outdir = Path(config['outdir'])
+    outdir.mkdir(exist_ok=True, parents=True)
+
+    s_test_outdir = outdir.joinpath("s_test/")
+    if not s_test_outdir.exists():
+        s_test_outdir.mkdir()
+    grad_z_outdir = outdir.joinpath("grad_z/")
+    if not grad_z_outdir.exists():
+        grad_z_outdir.mkdir()
+
+    influence_results = {}
+
+    calc_s_test(model, test_loader, train_loader, s_test_outdir,
+                config['gpu'], config['damp'], config['scale'],
+                config['recursion_depth'], config['r_averaging'],
+                config['test_start_index'])
+    calc_grad_z(model, train_loader, grad_z_outdir, config['gpu'],
+                config['test_start_index'])
+
+    train_dataset_len = len(train_loader.dataset)
+    influences, harmful, helpful = calc_influence_function(train_dataset_len)
+
+    influence_results['influences'] = influences
+    influence_results['harmful'] = harmful
+    influence_results['helpful'] = helpful
+    influences_path = outdir.joinpath("influence_results.json")
+    save_json(influence_results, influences_path)

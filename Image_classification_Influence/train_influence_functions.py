@@ -5,6 +5,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 
+# Source: https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html
+# Last access: 2019-11-20
+
 
 def load_data():
     transform = transforms.Compose(
@@ -44,16 +47,16 @@ class Net(nn.Module):
         return x
 
 
-def train(trainloader,testloader, net):
+def train(trainloader, testloader, net):
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.001, momentum=0.9)
 
-    for epoch in range(30):  # loop over the dataset multiple times
+    for epoch in range(10):  # loop over the dataset multiple times
         running_loss = 0.0
         for i, data in enumerate(trainloader, 0):
             # get the inputs; data is a list of [inputs, labels]
             #inputs, labels = data
-            inputs, labels = data[0], data[1]
+            inputs, labels = data[0].cuda(), data[1].cuda()
 
             # zero the parameter gradients
             optimizer.zero_grad()
@@ -83,6 +86,7 @@ def load_model():
     PATH = './cifar_net.pth'
     net = Net()
     net.load_state_dict(torch.load(PATH))
+    net.cuda()
     return net
 
 
@@ -94,7 +98,7 @@ def test(testloader, net):
     with torch.no_grad():
         for data in testloader:
             #images, labels = data
-            images, labels = data[0], data[1]
+            images, labels = data[0].cuda(), data[1].cuda()
             outputs = net(images)
             _, predicted = torch.max(outputs.data, 1)
             total += labels.size(0)
@@ -115,9 +119,10 @@ def test(testloader, net):
             classes[i], 100 * class_correct[i] / class_total[i]))
 
 
-
-trainloader, testloader = load_data()
-model = Net()
-train(trainloader, testloader, model)
-test(testloader, model)
-save_model(model)
+if __name__ == "__main__":
+    trainloader, testloader = load_data()
+    model = Net()
+    model.cuda()
+    train(trainloader, testloader, model)
+    test(testloader, model)
+    save_model(model)
