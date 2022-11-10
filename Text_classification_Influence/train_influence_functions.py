@@ -5,13 +5,12 @@ import numpy as np
 from torch import nn
 from transformers import BertModel
 from transformers import BertTokenizer
-import pandas as pd
 from torch.optim import Adam
 from tqdm import tqdm
 tokenizer = BertTokenizer.from_pretrained('bert-base-cased')
 
-train=AG_NEWS(split='train')
-test=AG_NEWS(split='test')
+train=AG_NEWS(root='./data', split='train')
+test=AG_NEWS(root='./data', split='test')
 
 class Dataset(torch.utils.data.Dataset):
 
@@ -157,11 +156,12 @@ def load_model():
     net.load_state_dict(torch.load(PATH))
     return net
 
-EPOCHS = 5
-model = BertClassifier()
-LR = 1e-6            
-            
 
-trainloader, testloader = load_data()
-train(model, trainloader, testloader, LR, EPOCHS)
-save_model(model)
+
+if __name__ == "__main__":
+    EPOCHS = 10
+    LR = 1e-6
+    trainloader, testloader = load_data()
+    model = BertClassifier()
+    train(model, trainloader, testloader, LR, EPOCHS)
+    save_model(model)
