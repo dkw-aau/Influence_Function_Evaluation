@@ -9,7 +9,7 @@ if __name__ == "__main__":
     gpu = 1
     recursion_depth = 500
     r = 10
-    influences, harmful, helpful =calc_influence_single(model, trainloader, testloader, test_id_num, gpu,
+    influences=calc_influence_single(model, trainloader, testloader, test_id_num, gpu,
                           recursion_depth, r, s_test_vec=None,
                           time_logging=False)
 

@@ -123,7 +123,7 @@ def get_default_config():
     config = {
         'outdir': 'outdir',
         'seed': 42,
-        'gpu': 0,
+        'gpu': 1,
         'dataset': 'CIFAR10',
         'num_classes': 10,
         'test_sample_num': 1,

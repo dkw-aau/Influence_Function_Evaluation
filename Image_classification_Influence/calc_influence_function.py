@@ -2,7 +2,7 @@ import torch
 from torch.autograd import grad
 from utils import *
 
-def s_test(z_test, t_test, model, z_loader, gpu=-1, damp=0.01, scale=25.0,
+def s_test(z_test, t_test, model, z_loader, gpu=1, damp=0.01, scale=25.0,
            recursion_depth=5000):
     """s_test can be precomputed for each test point of interest, and then
     multiplied with grad_z to get the desired value for each training point.
@@ -66,7 +66,7 @@ def calc_loss(y, t):
     return loss
 
 
-def grad_z(z, t, model, gpu=-1):
+def grad_z(z, t, model, gpu=1):
     """Calculates the gradient z. One grad_z should be computed for each
     training sample.
     Arguments:
@@ -121,7 +121,7 @@ def hvp(y, w, v):
 
     return return_grads
 
-def calc_s_test(model, test_loader, train_loader, save=False, gpu=-1,
+def calc_s_test(model, test_loader, train_loader, save=False, gpu=1,
                 damp=0.01, scale=25, recursion_depth=5000, r=1, start=0):
     """Calculates s_test for the whole test dataset taking into account all
     training data images.
@@ -173,7 +173,7 @@ def calc_s_test(model, test_loader, train_loader, save=False, gpu=-1,
     return s_tests, save
 
 
-def calc_s_test_single(model, z_test, t_test, train_loader, gpu=-1,
+def calc_s_test_single(model, z_test, t_test, train_loader, gpu=1,
                        damp=0.01, scale=25, recursion_depth=5000, r=1):
     """Calculates s_test for a single test image taking into account the whole
     training dataset. s_test = invHessian * nabla(Loss(test_img, model params))
@@ -213,7 +213,7 @@ def calc_s_test_single(model, z_test, t_test, train_loader, gpu=-1,
     return s_test_vec
 
 
-def calc_grad_z(model, train_loader, save_pth=False, gpu=-1, start=0):
+def calc_grad_z(model, train_loader, save_pth=False, gpu=1, start=0):
     """Calculates grad_z and can save the output to files. One grad_z should
     be computed for each training data sample.
     Arguments:

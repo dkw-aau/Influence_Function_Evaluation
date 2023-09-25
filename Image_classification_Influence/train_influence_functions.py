@@ -85,8 +85,8 @@ def save_model(net):
 def load_model():
     PATH = './cifar_net.pth'
     net = Net()
-    net.load_state_dict(torch.load(PATH))
     net.cuda()
+    net.load_state_dict(torch.load(PATH))
     return net
 
 
