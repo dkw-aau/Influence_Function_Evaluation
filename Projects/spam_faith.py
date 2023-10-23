@@ -257,33 +257,33 @@ def aide_eval(test_idx):
     cosine_sim=simlist[[concatenated_array]]
     set1=get_explanation(test_idx)
 #     mean_ex_similarity=[]
-#     jaccard_sim=[]
+    jaccard_sim=[]
 #     mbm_sim=[]
     fuzzy_jac=[]
     for i in tqdm(concatenated_array):
         set2=get_explanation(i)
-#         jaccard_sim.append(jaccard_similarity(set(set1), set(set2)))
+        jaccard_sim.append(jaccard_similarity(set(set1), set(set2)))
 #         similarity_matrix = cosine_similarity(X_train[[set1]], X_train[[set2]])
 #         mean_ex_similarity.append(np.mean(similarity_matrix))
         mbm=average_mbm_similarity(X_train[[set1]], X_train[[set2]])
 #         mbm_sim.append(mbm)
         fuzzy_jac.append(mbm/(len(set2)/5 - mbm))
           
-    return cosine_sim.flatten().tolist(), fuzzy_jac
+    return cosine_sim.flatten().tolist(), fuzzy_jac, jaccard_sim
 
 
 sample_idx = random.sample(range(0, X_test.shape[0]), 100)
 cosine_total=[]
-mbm_total=[]
+# mbm_total=[]
 jaccard_total=[]
 fuzzy_total=[]
 for i in tqdm(sample_idx):
-    cosine_sim, fuzzy_jac = aide_eval(i)
+    cosine_sim, fuzzy_jac, jaccard_sim = aide_eval(i)
     cosine_total.append(cosine_sim)
 #     mbm_total.append(mbm_sim)
     fuzzy_total.append(fuzzy_jac)
 #     mean_total.append(mean_ex_similarity)
-#     jaccard_total.append(jaccard_sim)
+    jaccard_total.append(jaccard_sim)
     
 # plt.figure()
 # plt.scatter(cosine_total, mbm_total, alpha=0.5)
@@ -293,18 +293,22 @@ for i in tqdm(sample_idx):
 # plt.legend(fontsize=7)
 # plt.savefig('aide_txt_mbm22_vs_cos.eps', format='eps')
 
-# plt.figure()
-# plt.scatter(cosine_total, jaccard_total, alpha=0.5)
-# plt.title("AIDE Faithfulness")
-# plt.xlabel('Cosine Similarity of Emails')
-# plt.ylabel('Jaccard Similarity of Explanations')
-# plt.legend(fontsize=7)
-# plt.savefig('aide_txt_jac22_vs_cos.eps', format='eps')
+np.savez('plotdata/plot_spam.npz', cosine=cosine_total, jaccard=jaccard_total, fuzzy=fuzzy_total)
+
+plt.rcParams.update({'font.size': 16})
+
+plt.figure()
+plt.scatter(cosine_total, jaccard_total, alpha=0.5)
+plt.xlabel('Cosine Similarity')
+plt.ylabel('Jaccard Similarity')
+plt.rcParams['pdf.fonttype'] = 42
+plt.rcParams['ps.fonttype'] = 42
+plt.savefig('aide_txt_jaclast_vs_cos.pdf', bbox_inches='tight')
 
 plt.figure()
 plt.scatter(cosine_total, fuzzy_total, alpha=0.5)
-plt.title("AIDE Faithfulness")
-plt.xlabel('Cosine Similarity of Emails')
-plt.ylabel('Fuzzy Jaccard Similarity of Explanations')
-plt.legend(fontsize=7)
-plt.savefig('aide_txt_fuzjac_vs_cos.eps', format='eps')
+plt.xlabel('Cosine Similarity')
+plt.ylabel('Fuzzy Jaccard Similarity')
+plt.rcParams['pdf.fonttype'] = 42
+plt.rcParams['ps.fonttype'] = 42
+plt.savefig('aide_txt_fuzjaclast_vs_cos.pdf', bbox_inches='tight')

@@ -63,6 +63,8 @@ def load_inception_embeds():
             Y.append(labels)
 
         embeds[f"X_{split}"] = np.concatenate(X, axis=0).astype(np.float32)
+        embeds[f"X_{split}"][4][0]=0
+ 
         embeds[f"Y_{split}"] = np.concatenate(Y, axis=0).astype(np.float32)
 
     np.savez(str(DOGFISH_EMB_PATH), **embeds)
@@ -91,7 +93,6 @@ def fit_model(X, Y):
 def captioned_image(model, embeds, split, idx):
     x = embeds[f"X_{split}"][idx]
     y = embeds[f"Y_{split}"][idx].item()
-
     x = torch.tensor(x, device=DEVICE).unsqueeze(0)
     y_hat = model(x).round().item()
 

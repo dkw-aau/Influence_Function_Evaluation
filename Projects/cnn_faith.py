@@ -108,14 +108,14 @@ def aide_eval(test_idx):
     concatenated_array = np.concatenate((mostsim, leastsim)).tolist()
     set1=get_explanation(test_idx)
 #     print(f'set1 for {test_idx},  {set1}')
-#     mbm_sim=[]
+    jac_sim=[]
     carray=[]
     fuzzy_jac=[]
     for i in tqdm(concatenated_array):
         influences = module.influences(train_idxs=train_idxs, test_idxs=[i])
         if np.count_nonzero(influences)>800:
             set2=get_explanation(i)
-#             jac_sim.append(jaccard_similarity(set(set1), set(set2)))
+            jac_sim.append(jaccard_similarity(set(set1), set(set2)))
             similarity_matrix = cosine_similarity(X_train[[set1]], X_train[[set2]])
             mbm=average_mbm_similarity(X_train[[set1]], X_train[[set2]])
 #             mbm_sim.append(mbm)
@@ -124,39 +124,42 @@ def aide_eval(test_idx):
         else:
             continue
     cosine_sim=simlist[[carray]]
-    return cosine_sim.flatten().tolist(),fuzzy_jac
+    return cosine_sim.flatten().tolist(),fuzzy_jac, jac_sim
 
 
 sample_idx = random.sample(range(0, X_test.shape[0]), 50)
 cosine_total=[]
-# jaccard_total=[]
+jaccard_total=[]
 fuzzy_total=[]
 for i in tqdm(sample_idx):
     influences = module.influences(train_idxs=train_idxs, test_idxs=[i])
     if np.count_nonzero(influences)>800:        
-        cosine_sim, fuzzy_jac = aide_eval(i)
+        cosine_sim, fuzzy_jac, jac_sim = aide_eval(i)
         cosine_total.append(cosine_sim)
 #         mbm_total.append(mbm_sim)
-        #     mean_total.append(mean_ex_similarity)
+        jaccard_total.append(jac_sim)
         fuzzy_total.append(fuzzy_jac)
     else:
         continue
     
 def flatten_sum(matrix):
     return sum(matrix, [])
+np.savez('plotdata/plot_img.npz', cosine=cosine_total, jaccard=jaccard_total, fuzzy=fuzzy_total)
 
-# plt.figure()
-# plt.scatter(flatten_sum(cosine_total), flatten_sum(mbm_total), alpha=0.5)
-# plt.title("AIDE Faithfulness")
-# plt.xlabel('Cosine Similarity of Images')
-# plt.ylabel('Maximum Bipartite Matching Similarity of Explanations')
-# plt.legend(fontsize=7)
-# plt.savefig('aide_img_mbm_vs_cos.eps', format='eps')
+plt.rcParams.update({'font.size': 16})
+
+plt.figure()
+plt.scatter(flatten_sum(cosine_total), flatten_sum(jaccard_total), alpha=0.5)
+plt.xlabel('Cosine Similarity')
+plt.ylabel('Jaccard Similarity')
+plt.rcParams['pdf.fonttype'] = 42
+plt.rcParams['ps.fonttype'] = 42
+plt.savefig('aide_img_jaclast_vs_cos.pdf', bbox_inches='tight')
 
 plt.figure()
 plt.scatter(flatten_sum(cosine_total), flatten_sum(fuzzy_total), alpha=0.5)
-plt.title("AIDE Faithfulness")
-plt.xlabel('Cosine Similarity of Images')
-plt.ylabel('Fuzzy Jaccard Similarity of Explanations')
-plt.legend(fontsize=7)
-plt.savefig('aide_img_fuzzyjac_vs_cos.eps', format='eps')
+plt.xlabel('Cosine Similarity')
+plt.ylabel('Fuzzy Jaccard Similarity')
+plt.rcParams['pdf.fonttype'] = 42
+plt.rcParams['ps.fonttype'] = 42
+plt.savefig('aide_img_fuzjaclast_vs_cos.pdf', bbox_inches='tight')
