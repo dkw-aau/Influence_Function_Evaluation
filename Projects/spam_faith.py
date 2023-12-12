@@ -18,7 +18,7 @@ import random
 
 import matplotlib.pyplot as plt
 
-with open('data/spambert.pkl', 'rb') as f:
+with open('data/spambert1.pkl', 'rb') as f:
     df = pickle.load(f)
 
 # Load the pre-trained BERT model and tokenizer
@@ -94,9 +94,16 @@ def df_construct(test_idx, train_idxs):
     influences = module.influences(train_idxs=train_idxs, test_idxs=[test_idx])
     similarity=[cosine_similarity(X_test[test_idx].numpy().reshape(1,-1), X_train[i].numpy().reshape(1, -1)).item()
                for i in range(len(X_train))]
+    squared_diff = (clf(X_train.to(DEVICE)) - Y_train.to(DEVICE))**2
 
+    # Calculate the RMS error for each training point
+    train_losses = torch.sqrt(squared_diff)
+
+    # Detach the tensor from the computation graph
+    train_losses = train_losses.detach().requires_grad_(False)
+    relatif=influences/train_losses
     data = {'Influence': influences.reshape(-1).tolist(), 'Similarity': similarity, 'Label':Y_train.tolist(), 
-            'X_train':X_train.numpy().tolist(), 'message':text_train}
+            'X_train':X_train.numpy().tolist(), 'message':text_train, 'relatif':relatif.reshape(-1).tolist()}
     df = pd.DataFrame(data)
     return df
     
@@ -207,21 +214,27 @@ def jaccard_similarity(set1, set2):
     union = len(set1.union(set2))
     return intersection / union
 
-def get_explanation(i):
+# def get_explanation(i):
     
-        df = df_construct(i, train_idxs)
-        df_pos_sl, df_pos_ol = input_data(df, i, sett='positive')
-        df_neg_ol, df_neg_sl = input_data(df, i, sett='negative')
-        selected_indices_pos_sl = greedy_subset_selection(df_pos_sl, N=5, sett='positive', label='same')
-        selected_indices_pos_ol = greedy_subset_selection(df_pos_ol, N=5, sett='positive', label='opposite')
-        selected_indices_neg_sl = greedy_subset_selection(df_neg_sl, N=5, sett='negative', label='same')
-        selected_indices_neg_ol = greedy_subset_selection(df_neg_ol, N=5, sett='negative', label='opposite')
-        a=[df_pos_sl.Influence.index[k] for k in selected_indices_pos_sl]
-        b=[df_neg_ol.Influence.index[k] for k in selected_indices_neg_ol]
-        c=[df_neg_sl.Influence.index[k] for k in selected_indices_neg_sl]
-        d=[df_pos_ol.Influence.index[k] for k in selected_indices_pos_ol]
-        return a+b
+#         df = df_construct(i, train_idxs)
+#         df_pos_sl, df_pos_ol = input_data(df, i, sett='positive')
+#         df_neg_ol, df_neg_sl = input_data(df, i, sett='negative')
+#         selected_indices_pos_sl = greedy_subset_selection(df_pos_sl, N=5, sett='positive', label='same')
+#         selected_indices_pos_ol = greedy_subset_selection(df_pos_ol, N=5, sett='positive', label='opposite')
+#         selected_indices_neg_sl = greedy_subset_selection(df_neg_sl, N=5, sett='negative', label='same')
+#         selected_indices_neg_ol = greedy_subset_selection(df_neg_ol, N=5, sett='negative', label='opposite')
+#         a=[df_pos_sl.Influence.index[k] for k in selected_indices_pos_sl]
+#         b=[df_neg_ol.Influence.index[k] for k in selected_indices_neg_ol]
+#         c=[df_neg_sl.Influence.index[k] for k in selected_indices_neg_sl]
+#         d=[df_pos_ol.Influence.index[k] for k in selected_indices_pos_ol]
+#         return a+b
+# def get_explanation(i):
+#     return module.influences(train_idxs=train_idxs, test_idxs=[i]).argsort(descending=True)[:10].tolist()
 
+def get_explanation(i):
+    df = df_construct(i, train_idxs)
+    sup= df[df.relatif>0].sort_values('relatif', ascending=False).head(10).index.tolist()
+    return sup
     
 from scipy.optimize import linear_sum_assignment
 
@@ -293,7 +306,7 @@ for i in tqdm(sample_idx):
 # plt.legend(fontsize=7)
 # plt.savefig('aide_txt_mbm22_vs_cos.eps', format='eps')
 
-np.savez('plotdata/plot_spam.npz', cosine=cosine_total, jaccard=jaccard_total, fuzzy=fuzzy_total)
+np.savez('plotdata/plot_spam_rel.npz', cosine=cosine_total, jaccard=jaccard_total, fuzzy=fuzzy_total)
 
 plt.rcParams.update({'font.size': 16})
 
@@ -303,7 +316,7 @@ plt.xlabel('Cosine Similarity')
 plt.ylabel('Jaccard Similarity')
 plt.rcParams['pdf.fonttype'] = 42
 plt.rcParams['ps.fonttype'] = 42
-plt.savefig('aide_txt_jaclast_vs_cos.pdf', bbox_inches='tight')
+plt.savefig('rel_txt_jaclast_vs_cos.pdf', bbox_inches='tight')
 
 plt.figure()
 plt.scatter(cosine_total, fuzzy_total, alpha=0.5)
@@ -311,4 +324,4 @@ plt.xlabel('Cosine Similarity')
 plt.ylabel('Fuzzy Jaccard Similarity')
 plt.rcParams['pdf.fonttype'] = 42
 plt.rcParams['ps.fonttype'] = 42
-plt.savefig('aide_txt_fuzjaclast_vs_cos.pdf', bbox_inches='tight')
+plt.savefig('rel_txt_fuzjaclast_vs_cos.pdf', bbox_inches='tight')
